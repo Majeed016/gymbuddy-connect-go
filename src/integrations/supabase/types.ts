@@ -9,7 +9,184 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      fitness_profiles: {
+        Row: {
+          availability_days: string[]
+          created_at: string
+          fitness_goal: string
+          fitness_level: string
+          fitness_style: string[]
+          gym_name: string | null
+          id: string
+          location: string
+          preferred_time_slots: string[]
+          updated_at: string
+        }
+        Insert: {
+          availability_days: string[]
+          created_at?: string
+          fitness_goal: string
+          fitness_level: string
+          fitness_style: string[]
+          gym_name?: string | null
+          id: string
+          location: string
+          preferred_time_slots: string[]
+          updated_at?: string
+        }
+        Update: {
+          availability_days?: string[]
+          created_at?: string
+          fitness_goal?: string
+          fitness_level?: string
+          fitness_style?: string[]
+          gym_name?: string | null
+          id?: string
+          location?: string
+          preferred_time_slots?: string[]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      matches: {
+        Row: {
+          compatibility_score: number | null
+          created_at: string
+          id: string
+          status: string
+          updated_at: string
+          user1_id: string
+          user2_id: string
+        }
+        Insert: {
+          compatibility_score?: number | null
+          created_at?: string
+          id?: string
+          status: string
+          updated_at?: string
+          user1_id: string
+          user2_id: string
+        }
+        Update: {
+          compatibility_score?: number | null
+          created_at?: string
+          id?: string
+          status?: string
+          updated_at?: string
+          user1_id?: string
+          user2_id?: string
+        }
+        Relationships: []
+      }
+      messages: {
+        Row: {
+          created_at: string
+          id: string
+          match_id: string
+          message: string
+          read: boolean | null
+          sender_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          match_id: string
+          message: string
+          read?: boolean | null
+          sender_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          match_id?: string
+          message?: string
+          read?: boolean | null
+          sender_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          bio: string | null
+          created_at: string
+          full_name: string | null
+          id: string
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string
+          full_name?: string | null
+          id: string
+          updated_at?: string
+          username: string
+        }
+        Update: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+          username?: string
+        }
+        Relationships: []
+      }
+      workouts: {
+        Row: {
+          created_at: string
+          duration_minutes: number
+          id: string
+          location: string
+          match_id: string
+          notes: string | null
+          scheduled_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          duration_minutes: number
+          id?: string
+          location: string
+          match_id: string
+          notes?: string | null
+          scheduled_at: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          duration_minutes?: number
+          id?: string
+          location?: string
+          match_id?: string
+          notes?: string | null
+          scheduled_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workouts_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
