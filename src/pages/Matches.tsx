@@ -140,7 +140,7 @@ const Matches = () => {
           toast({
             title: "Complete Your Profile",
             description: "Please complete your fitness profile to find matches.",
-            variant: "warning"
+            variant: "destructive"
           });
           return;
         }
