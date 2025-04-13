@@ -54,10 +54,8 @@ export type Workout = {
 };
 
 export type MatchWithProfiles = Match & {
-  profiles: {
-    user1: Profile & { fitness_profile?: FitnessProfile };
-    user2: Profile & { fitness_profile?: FitnessProfile };
-  };
+  otherUser: Profile;
+  otherUserFitnessProfile?: FitnessProfile;
 };
 
 export type MatchWithOtherUser = Match & {

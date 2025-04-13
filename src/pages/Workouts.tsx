@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -51,6 +52,7 @@ const Workouts = () => {
   const [matches, setMatches] = useState<MatchWithProfiles[]>([]);
   const [selectedMatch, setSelectedMatch] = useState<MatchWithProfiles | null>(null);
   const [open, setOpen] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string[]>([]);
 
   const form = useForm<WorkoutFormValues>({
     resolver: zodResolver(workoutFormSchema),
@@ -62,51 +64,107 @@ const Workouts = () => {
     },
   })
 
-  // Fix the type error by ensuring proper type casting for workouts
   useEffect(() => {
     const fetchWorkouts = async () => {
       try {
-        // Fetch matches for the current user
+        if (!user) {
+          setDebugInfo(prev => [...prev, "No user logged in"]);
+          return;
+        }
+
+        // Step 1: Fetch accepted matches for the current user
         const { data: matchesData, error: matchesError } = await supabase
           .from('matches')
-          .select('*, profiles(user1:user1_id(*), user2:user2_id(*), fitness_profiles(*))')
-          .or(`user1_id.eq.${user?.id},user2_id.eq.${user?.id}`)
-          .eq('status', 'accepted')
+          .select('*')
+          .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+          .eq('status', 'accepted');
 
-        if (matchesError) throw matchesError;
-
-        setMatches(matchesData as MatchWithProfiles[]);
-
-        if (matchesData && matchesData.length > 0) {
-          const { data: workoutsData, error: workoutsError } = await supabase
-            .from('workouts')
-            .select('*')
-            .in('match_id', matchesData.map(match => match.id));
-
-          if (workoutsError) throw workoutsError;
-
-          const workoutsWithMatches = workoutsData.map(workout => {
-            const matchData = matchesData.find(match => match.id === workout.match_id);
-            // Ensure status is of the correct type
-            return {
-              ...workout,
-              status: workout.status as 'scheduled' | 'completed' | 'cancelled',
-              match: matchData
-            } as Workout & { match: MatchWithProfiles };
-          });
-
-          setWorkouts(workoutsWithMatches);
-
-          // Separate past and future workouts
-          const now = new Date();
-          const futureWorkouts = workoutsWithMatches.filter(workout => new Date(workout.scheduled_at) >= now);
-          const pastWorkouts = workoutsWithMatches.filter(workout => new Date(workout.scheduled_at) < now);
-
-          setWorkouts(futureWorkouts);
-          setPastWorkouts(pastWorkouts);
+        if (matchesError) {
+          setDebugInfo(prev => [...prev, `Error fetching matches: ${matchesError.message}`]);
+          throw matchesError;
         }
-      } catch (error) {
+
+        if (!matchesData || matchesData.length === 0) {
+          setDebugInfo(prev => [...prev, "No matches found for user"]);
+          setIsLoading(false);
+          return;
+        }
+
+        // Step 2: Fetch profiles for all users involved in matches
+        const otherUserIds = matchesData.map(match => 
+          match.user1_id === user.id ? match.user2_id : match.user1_id
+        );
+
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('profiles')
+          .select('*')
+          .in('id', otherUserIds);
+
+        if (profilesError) {
+          setDebugInfo(prev => [...prev, `Error fetching profiles: ${profilesError.message}`]);
+          throw profilesError;
+        }
+
+        // Step 3: Fetch fitness profiles for the other users
+        const { data: fitnessProfilesData, error: fitnessProfilesError } = await supabase
+          .from('fitness_profiles')
+          .select('*')
+          .in('id', otherUserIds);
+
+        if (fitnessProfilesError) {
+          setDebugInfo(prev => [...prev, `Error fetching fitness profiles: ${fitnessProfilesError.message}`]);
+          throw fitnessProfilesError;
+        }
+
+        // Step 4: Combine match data with profiles
+        const enhancedMatches = matchesData.map(match => {
+          const otherUserId = match.user1_id === user.id ? match.user2_id : match.user1_id;
+          const otherUserProfile = profilesData.find(profile => profile.id === otherUserId);
+          const otherUserFitnessProfile = fitnessProfilesData.find(fp => fp.id === otherUserId);
+          
+          return {
+            ...match,
+            otherUser: otherUserProfile as Profile,
+            otherUserFitnessProfile: otherUserFitnessProfile as FitnessProfile
+          } as MatchWithProfiles;
+        });
+
+        setMatches(enhancedMatches);
+
+        // Step 5: Fetch workouts for these matches
+        const { data: workoutsData, error: workoutsError } = await supabase
+          .from('workouts')
+          .select('*')
+          .in('match_id', matchesData.map(match => match.id));
+
+        if (workoutsError) {
+          setDebugInfo(prev => [...prev, `Error fetching workouts: ${workoutsError.message}`]);
+          throw workoutsError;
+        }
+
+        // Step 6: Combine workout data with match data
+        const workoutsWithMatches = workoutsData.map(workout => {
+          const matchData = enhancedMatches.find(match => match.id === workout.match_id);
+          return {
+            ...workout,
+            match: matchData as MatchWithProfiles
+          } as Workout & { match: MatchWithProfiles };
+        });
+
+        // Step 7: Separate past and future workouts
+        const now = new Date();
+        const futureWorkouts = workoutsWithMatches.filter(
+          workout => new Date(workout.scheduled_at) >= now
+        );
+        const pastWorkouts = workoutsWithMatches.filter(
+          workout => new Date(workout.scheduled_at) < now
+        );
+
+        setWorkouts(futureWorkouts);
+        setPastWorkouts(pastWorkouts);
+      } catch (error: any) {
         console.error('Error fetching workouts:', error);
+        setDebugInfo(prev => [...prev, `Error in fetchWorkouts: ${error.message || JSON.stringify(error)}`]);
         toast({
           title: "Error",
           description: "Failed to load workouts. Please try again.",
@@ -198,12 +256,11 @@ const Workouts = () => {
       const { data: workoutData, error: workoutError } = await supabase
         .from('workouts')
         .insert({
-          match_id: selectedMatch?.id || '',
+          match_id: selectedMatch.id,
           scheduled_at: data.scheduled_at.toISOString(),
           duration_minutes: parseInt(data.duration),
           location: data.location,
           notes: data.notes,
-          // Ensure status is of the correct type
           status: 'scheduled' as 'scheduled' | 'completed' | 'cancelled'
         })
         .select('*')
@@ -211,13 +268,11 @@ const Workouts = () => {
 
       if (workoutError) throw workoutError;
 
-      // Fix the type error by ensuring proper type casting
       setWorkouts(prev => [
         ...prev,
         {
           ...workoutData,
-          status: workoutData.status as 'scheduled' | 'completed' | 'cancelled',
-          match: selectedMatch as MatchWithProfiles
+          match: selectedMatch
         } as Workout & { match: MatchWithProfiles }
       ]);
 
@@ -228,7 +283,7 @@ const Workouts = () => {
 
       form.reset();
       setOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error scheduling workout:', error);
       toast({
         title: "Error",
@@ -249,6 +304,15 @@ const Workouts = () => {
   return (
     <div className="container mx-auto py-8 px-4">
       <h1 className="text-3xl font-bold mb-6 text-purple-700">Your Workouts</h1>
+
+      {debugInfo.length > 0 && (
+        <div className="bg-yellow-50 p-4 rounded-lg mb-4">
+          <h3 className="font-bold mb-2">Debug Information:</h3>
+          {debugInfo.map((info, index) => (
+            <p key={index} className="text-xs text-gray-600">{info}</p>
+          ))}
+        </div>
+      )}
 
       <Card className="mb-6">
         <CardHeader>
@@ -372,9 +436,7 @@ const Workouts = () => {
                       <SelectContent>
                         {matches.map((match) => (
                           <SelectItem key={match.id} value={match.id}>
-                            {match.profiles?.user1?.id === user?.id
-                              ? match.profiles.user2?.full_name || match.profiles.user2?.username
-                              : match.profiles?.user1?.full_name || match.profiles.user1?.username}
+                            {match.otherUser?.full_name || match.otherUser?.username}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -404,9 +466,7 @@ const Workouts = () => {
             <Card key={workout.id} className="bg-white shadow-md rounded-md overflow-hidden">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
-                  Workout with {workout.match.profiles?.user1?.id === user?.id
-                    ? workout.match.profiles.user2?.full_name || workout.match.profiles.user2?.username
-                    : workout.match.profiles?.user1?.full_name || workout.match.profiles.user1?.username}
+                  Workout with {workout.match.otherUser?.full_name || workout.match.otherUser?.username}
                 </CardTitle>
                 {workout.status === 'completed' && (
                   <CheckCircle className="h-4 w-4 text-green-500" />
@@ -482,9 +542,7 @@ const Workouts = () => {
             <Card key={workout.id} className="bg-white shadow-md rounded-md overflow-hidden">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
-                  Workout with {workout.match.profiles?.user1?.id === user?.id
-                    ? workout.match.profiles.user2?.full_name || workout.match.profiles.user2?.username
-                    : workout.match.profiles?.user1?.full_name || workout.match.profiles.user1?.username}
+                  Workout with {workout.match.otherUser?.full_name || workout.match.otherUser?.username}
                 </CardTitle>
                 {workout.status === 'completed' && (
                   <CheckCircle className="h-4 w-4 text-green-500" />
@@ -513,25 +571,6 @@ const Workouts = () => {
                 )}
               </CardContent>
               <CardFooter className="flex justify-between items-center p-4">
-                {workout.status === 'scheduled' && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleWorkoutCompletion(workout.id)}
-                      className="bg-green-500 hover:bg-green-700 text-white"
-                    >
-                      Complete
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => handleWorkoutCancellation(workout.id)}
-                    >
-                      Cancel
-                    </Button>
-                  </>
-                )}
                 {workout.status === 'completed' && (
                   <div className="text-green-500 font-semibold">Completed!</div>
                 )}
