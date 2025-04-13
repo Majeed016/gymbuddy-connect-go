@@ -1,9 +1,8 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, User, X, Check, MapPin, Calendar, Clock, Activity } from "lucide-react";
+import { Loader2, User, X, Check, MapPin, Calendar, Clock, Activity, MessageSquare } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
@@ -25,34 +24,29 @@ const calculateCompatibilityScore = (
   let score = 0;
   let totalFactors = 0;
   
-  // Fitness level - worth 1 point
   if (userFitnessProfile.fitness_level === otherFitnessProfile.fitness_level) {
     score += 1;
   }
   totalFactors += 1;
   
-  // Fitness styles - worth 3 points
   const sharedStyles = userFitnessProfile.fitness_style.filter(style => 
     otherFitnessProfile.fitness_style.includes(style)
   );
   score += (sharedStyles.length / Math.max(userFitnessProfile.fitness_style.length, otherFitnessProfile.fitness_style.length)) * 3;
   totalFactors += 3;
   
-  // Availability days - worth 2 points
   const sharedDays = userFitnessProfile.availability_days.filter(day => 
     otherFitnessProfile.availability_days.includes(day)
   );
   score += (sharedDays.length / 7) * 2;
   totalFactors += 2;
   
-  // Time slots - worth 2 points
   const sharedTimeSlots = userFitnessProfile.preferred_time_slots.filter(slot => 
     otherFitnessProfile.preferred_time_slots.includes(slot)
   );
   score += (sharedTimeSlots.length / Math.max(userFitnessProfile.preferred_time_slots.length, otherFitnessProfile.preferred_time_slots.length)) * 2;
   totalFactors += 2;
   
-  // Location - simple check if gym_name is the same - worth 2 points
   if (
     userFitnessProfile.gym_name && 
     otherFitnessProfile.gym_name && 
@@ -66,7 +60,6 @@ const calculateCompatibilityScore = (
   }
   totalFactors += 2;
   
-  // Calculate percentage
   return parseFloat((score / totalFactors).toFixed(2));
 };
 
@@ -115,7 +108,6 @@ const Matches = () => {
       if (!user) return;
       
       try {
-        // Fetch user's fitness profile
         const { data: fitnessProfileData, error: fitnessProfileError } = await supabase
           .from('fitness_profiles')
           .select('*')
@@ -123,9 +115,15 @@ const Matches = () => {
           .single();
         
         if (fitnessProfileError) throw fitnessProfileError;
-        setUserFitnessProfile(fitnessProfileData);
         
-        // Fetch all fitness profiles except the user's
+        const typedFitnessProfile: FitnessProfile = {
+          ...fitnessProfileData,
+          fitness_level: fitnessProfileData.fitness_level as 'beginner' | 'intermediate' | 'advanced',
+          fitness_goal: fitnessProfileData.fitness_goal as 'bulking' | 'cutting' | 'maintenance' | 'endurance' | 'flexibility' | 'general'
+        };
+        
+        setUserFitnessProfile(typedFitnessProfile);
+        
         const { data: allFitnessProfiles, error: allFitnessProfilesError } = await supabase
           .from('fitness_profiles')
           .select('*')
@@ -133,14 +131,12 @@ const Matches = () => {
         
         if (allFitnessProfilesError) throw allFitnessProfilesError;
         
-        // Fetch all profiles
         const { data: allProfiles, error: allProfilesError } = await supabase
           .from('profiles')
           .select('*');
         
         if (allProfilesError) throw allProfilesError;
         
-        // Fetch user's existing matches
         const { data: userMatches, error: userMatchesError } = await supabase
           .from('matches')
           .select('*, profiles(*)')
@@ -148,7 +144,6 @@ const Matches = () => {
         
         if (userMatchesError) throw userMatchesError;
         
-        // Process existing matches
         const processedExistingMatches = await Promise.all(
           userMatches.map(async (match) => {
             const otherUserId = match.user1_id === user.id ? match.user2_id : match.user1_id;
@@ -164,35 +159,42 @@ const Matches = () => {
             return {
               ...match,
               otherUser: otherUserProfile,
-              otherUserFitnessProfile,
+              otherUserFitnessProfile: otherUserFitnessProfile ? {
+                ...otherUserFitnessProfile,
+                fitness_level: otherUserFitnessProfile.fitness_level as 'beginner' | 'intermediate' | 'advanced',
+                fitness_goal: otherUserFitnessProfile.fitness_goal as 'bulking' | 'cutting' | 'maintenance' | 'endurance' | 'flexibility' | 'general'
+              } : null,
             };
           })
         );
         
         setExistingMatches(processedExistingMatches);
         
-        // Find all IDs of users that are already matched with the current user
         const existingMatchUserIds = userMatches.flatMap(match => [match.user1_id, match.user2_id]);
         
-        // Filter out profiles that are already matched
         const availableProfiles = allFitnessProfiles.filter(
           profile => !existingMatchUserIds.includes(profile.id)
         );
         
-        // Calculate compatibility scores and create potential matches
         const potentialMatchesWithScores = availableProfiles.map(fitnessProfile => {
           const profile = allProfiles.find(p => p.id === fitnessProfile.id);
-          const compatibilityScore = calculateCompatibilityScore(fitnessProfileData, fitnessProfile);
+          
+          const typedFitnessProfile: FitnessProfile = {
+            ...fitnessProfile,
+            fitness_level: fitnessProfile.fitness_level as 'beginner' | 'intermediate' | 'advanced',
+            fitness_goal: fitnessProfile.fitness_goal as 'bulking' | 'cutting' | 'maintenance' | 'endurance' | 'flexibility' | 'general'
+          };
+          
+          const compatibilityScore = calculateCompatibilityScore(typedFitnessProfile, typedFitnessProfile);
           
           return {
             id: fitnessProfile.id,
             profile,
-            fitnessProfile,
+            fitnessProfile: typedFitnessProfile,
             compatibilityScore,
           };
         });
         
-        // Sort by compatibility score
         potentialMatchesWithScores.sort((a, b) => b.compatibilityScore - a.compatibilityScore);
         
         setPotentialMatches(potentialMatchesWithScores);
@@ -233,10 +235,8 @@ const Matches = () => {
         });
       }
       
-      // Remove the user from potential matches
       setPotentialMatches(prev => prev.filter(match => match.id !== matchUserId));
       
-      // If it was accepted, refresh the existing matches
       if (action === 'accept') {
         const { data: newMatch, error } = await supabase
           .from('matches')
@@ -283,7 +283,6 @@ const Matches = () => {
       
       if (error) throw error;
       
-      // Update UI
       setExistingMatches(prev => 
         prev.map(match => 
           match.id === matchId 

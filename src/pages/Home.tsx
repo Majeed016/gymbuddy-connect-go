@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -69,21 +68,18 @@ const Home = () => {
       if (!user) return;
       
       try {
-        // Fetch user profile
         const { data: profileData } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', user.id)
           .single();
         
-        // Fetch fitness profile
         const { data: fitnessProfileData } = await supabase
           .from('fitness_profiles')
           .select('*')
           .eq('id', user.id)
           .single();
         
-        // Fetch matches
         const { data: matchesData } = await supabase
           .from('matches')
           .select('*')
@@ -95,7 +91,6 @@ const Home = () => {
           accepted: matchesData?.filter(m => m.status === 'accepted').length || 0,
         };
         
-        // Fetch upcoming workouts
         const { data: workoutsData } = await supabase
           .from('workouts')
           .select('*')
@@ -105,11 +100,14 @@ const Home = () => {
           .order('scheduled_at', { ascending: true })
           .limit(3);
         
-        // Process workouts to include partner names
         const processedWorkouts = await Promise.all(
           (workoutsData || []).map(async (workout) => {
             const match = matchesData?.find(m => m.id === workout.match_id);
-            if (!match) return { ...workout, partnerName: 'Unknown' };
+            if (!match) return { 
+              ...workout, 
+              partnerName: 'Unknown',
+              status: workout.status as 'scheduled' | 'completed' | 'cancelled'
+            };
             
             const partnerId = match.user1_id === user.id ? match.user2_id : match.user1_id;
             const { data: partnerData } = await supabase
@@ -121,11 +119,20 @@ const Home = () => {
             return {
               ...workout,
               partnerName: partnerData?.full_name || partnerData?.username || 'Unknown',
+              status: workout.status as 'scheduled' | 'completed' | 'cancelled'
             };
           })
         );
         
-        // Fetch recent messages
+        let typedFitnessProfile: FitnessProfile | null = null;
+        if (fitnessProfileData) {
+          typedFitnessProfile = {
+            ...fitnessProfileData,
+            fitness_level: fitnessProfileData.fitness_level as 'beginner' | 'intermediate' | 'advanced',
+            fitness_goal: fitnessProfileData.fitness_goal as 'bulking' | 'cutting' | 'maintenance' | 'endurance' | 'flexibility' | 'general'
+          };
+        }
+        
         const { data: messagesData } = await supabase
           .from('messages')
           .select('*')
@@ -133,7 +140,6 @@ const Home = () => {
           .order('created_at', { ascending: false })
           .limit(5);
         
-        // Process messages to include sender information
         const processedMessages = await Promise.all(
           (messagesData || []).map(async (message) => {
             const { data: senderData } = await supabase
@@ -155,7 +161,7 @@ const Home = () => {
         
         setDashboardData({
           profile: profileData,
-          fitnessProfile: fitnessProfileData,
+          fitnessProfile: typedFitnessProfile,
           matches: matchCounts,
           upcomingWorkouts: processedWorkouts,
           recentMessages: processedMessages,

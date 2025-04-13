@@ -59,3 +59,12 @@ export type MatchWithProfiles = Match & {
     user2: Profile & { fitness_profile?: FitnessProfile };
   };
 };
+
+export type MatchWithOtherUser = Match & {
+  otherUser: {
+    id: string;
+    username: string;
+    full_name: string | null;
+    avatar_url: string | null;
+  };
+};

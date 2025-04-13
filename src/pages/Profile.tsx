@@ -77,7 +77,16 @@ const Profile = () => {
           throw fitnessProfileError;
         }
         
-        setFitnessProfile(fitnessProfileData);
+        if (fitnessProfileData) {
+          // Type cast to match our FitnessProfile type
+          const typedFitnessProfile: FitnessProfile = {
+            ...fitnessProfileData,
+            fitness_level: fitnessProfileData.fitness_level as 'beginner' | 'intermediate' | 'advanced',
+            fitness_goal: fitnessProfileData.fitness_goal as 'bulking' | 'cutting' | 'maintenance' | 'endurance' | 'flexibility' | 'general'
+          };
+          
+          setFitnessProfile(typedFitnessProfile);
+        }
       } catch (error) {
         console.error('Error fetching profile data:', error);
         toast({

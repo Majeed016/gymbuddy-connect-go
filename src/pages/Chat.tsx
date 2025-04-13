@@ -8,20 +8,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { MessageSquare, Send, Loader2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Match, Message as MessageType } from '@/types/supabase';
+import { Match, Message as MessageType, MatchWithOtherUser } from '@/types/supabase';
 
 type ChatMessage = MessageType & {
   sender: {
     username: string;
-    avatar_url: string | null;
-  }
-};
-
-type MatchWithOtherUser = Match & {
-  otherUser: {
-    id: string;
-    username: string;
-    full_name: string | null;
     avatar_url: string | null;
   }
 };
@@ -61,7 +52,7 @@ const Chat = () => {
       try {
         const { data, error } = await supabase
           .from('matches')
-          .select('id, user1_id, user2_id, status, created_at')
+          .select('id, user1_id, user2_id, status, created_at, updated_at')
           .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
           .eq('status', 'accepted');
         
@@ -83,7 +74,7 @@ const Chat = () => {
             return {
               ...match,
               otherUser: otherUserData,
-            };
+            } as MatchWithOtherUser;
           })
         );
         
