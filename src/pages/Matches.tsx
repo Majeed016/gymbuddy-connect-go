@@ -24,29 +24,34 @@ const calculateCompatibilityScore = (
   let score = 0;
   let totalFactors = 0;
   
+  // Fitness level matching
   if (userFitnessProfile.fitness_level === otherFitnessProfile.fitness_level) {
     score += 1;
   }
   totalFactors += 1;
   
+  // Fitness style matching
   const sharedStyles = userFitnessProfile.fitness_style.filter(style => 
     otherFitnessProfile.fitness_style.includes(style)
   );
   score += (sharedStyles.length / Math.max(userFitnessProfile.fitness_style.length, otherFitnessProfile.fitness_style.length)) * 3;
   totalFactors += 3;
   
+  // Availability days matching
   const sharedDays = userFitnessProfile.availability_days.filter(day => 
     otherFitnessProfile.availability_days.includes(day)
   );
   score += (sharedDays.length / 7) * 2;
   totalFactors += 2;
   
+  // Time slots matching
   const sharedTimeSlots = userFitnessProfile.preferred_time_slots.filter(slot => 
     otherFitnessProfile.preferred_time_slots.includes(slot)
   );
   score += (sharedTimeSlots.length / Math.max(userFitnessProfile.preferred_time_slots.length, otherFitnessProfile.preferred_time_slots.length)) * 2;
   totalFactors += 2;
   
+  // Location and gym matching
   if (
     userFitnessProfile.gym_name && 
     otherFitnessProfile.gym_name && 
@@ -59,6 +64,12 @@ const calculateCompatibilityScore = (
     score += 1;
   }
   totalFactors += 2;
+  
+  // Fitness goal matching (added more weight)
+  if (userFitnessProfile.fitness_goal === otherFitnessProfile.fitness_goal) {
+    score += 3;
+    totalFactors += 3;
+  }
   
   return parseFloat((score / totalFactors).toFixed(2));
 };
@@ -102,19 +113,37 @@ const Matches = () => {
   const [existingMatches, setExistingMatches] = useState<any[]>([]);
   const [userFitnessProfile, setUserFitnessProfile] = useState<FitnessProfile | null>(null);
   const [activeTab, setActiveTab] = useState('potential');
+  const [debugInfo, setDebugInfo] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!user) return;
+      if (!user) {
+        setDebugInfo(prev => [...prev, "No user logged in"]);
+        return;
+      }
       
       try {
+        // Fetch user's fitness profile
         const { data: fitnessProfileData, error: fitnessProfileError } = await supabase
           .from('fitness_profiles')
           .select('*')
           .eq('id', user.id)
           .single();
         
-        if (fitnessProfileError) throw fitnessProfileError;
+        if (fitnessProfileError) {
+          setDebugInfo(prev => [...prev, `Error fetching fitness profile: ${fitnessProfileError.message}`]);
+          throw fitnessProfileError;
+        }
+        
+        if (!fitnessProfileData) {
+          setDebugInfo(prev => [...prev, "No fitness profile found for the user"]);
+          toast({
+            title: "Complete Your Profile",
+            description: "Please complete your fitness profile to find matches.",
+            variant: "warning"
+          });
+          return;
+        }
         
         const typedFitnessProfile: FitnessProfile = {
           ...fitnessProfileData,
@@ -124,25 +153,37 @@ const Matches = () => {
         
         setUserFitnessProfile(typedFitnessProfile);
         
+        // Fetch all fitness profiles except the current user's
         const { data: allFitnessProfiles, error: allFitnessProfilesError } = await supabase
           .from('fitness_profiles')
           .select('*')
           .neq('id', user.id);
         
-        if (allFitnessProfilesError) throw allFitnessProfilesError;
+        if (allFitnessProfilesError) {
+          setDebugInfo(prev => [...prev, `Error fetching all fitness profiles: ${allFitnessProfilesError.message}`]);
+          throw allFitnessProfilesError;
+        }
         
+        // Fetch corresponding profiles
         const { data: allProfiles, error: allProfilesError } = await supabase
           .from('profiles')
           .select('*');
         
-        if (allProfilesError) throw allProfilesError;
+        if (allProfilesError) {
+          setDebugInfo(prev => [...prev, `Error fetching profiles: ${allProfilesError.message}`]);
+          throw allProfilesError;
+        }
         
+        // Fetch existing matches to exclude from potential matches
         const { data: userMatches, error: userMatchesError } = await supabase
           .from('matches')
           .select('*, profiles(*)')
           .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`);
         
-        if (userMatchesError) throw userMatchesError;
+        if (userMatchesError) {
+          setDebugInfo(prev => [...prev, `Error fetching matches: ${userMatchesError.message}`]);
+          throw userMatchesError;
+        }
         
         const processedExistingMatches = await Promise.all(
           userMatches.map(async (match) => {
@@ -172,9 +213,21 @@ const Matches = () => {
         
         const existingMatchUserIds = userMatches.flatMap(match => [match.user1_id, match.user2_id]);
         
+        // Filter out users already in matches and with completed profiles
         const availableProfiles = allFitnessProfiles.filter(
-          profile => !existingMatchUserIds.includes(profile.id)
+          profile => 
+            !existingMatchUserIds.includes(profile.id) && 
+            profile.fitness_level && 
+            profile.fitness_goal && 
+            profile.fitness_style.length > 0
         );
+        
+        setDebugInfo(prev => [
+          ...prev, 
+          `Total fitness profiles: ${allFitnessProfiles.length}`,
+          `Existing match user IDs: ${existingMatchUserIds.join(', ')}`,
+          `Available profiles: ${availableProfiles.length}`
+        ]);
         
         const potentialMatchesWithScores = availableProfiles.map(fitnessProfile => {
           const profile = allProfiles.find(p => p.id === fitnessProfile.id);
@@ -185,7 +238,10 @@ const Matches = () => {
             fitness_goal: fitnessProfile.fitness_goal as 'bulking' | 'cutting' | 'maintenance' | 'endurance' | 'flexibility' | 'general'
           };
           
-          const compatibilityScore = calculateCompatibilityScore(typedFitnessProfile, typedFitnessProfile);
+          const compatibilityScore = calculateCompatibilityScore(
+            userFitnessProfile, 
+            typedFitnessProfile
+          );
           
           return {
             id: fitnessProfile.id,
@@ -195,9 +251,18 @@ const Matches = () => {
           };
         });
         
-        potentialMatchesWithScores.sort((a, b) => b.compatibilityScore - a.compatibilityScore);
+        // Filter out matches with very low compatibility
+        const filteredMatches = potentialMatchesWithScores
+          .filter(match => match.compatibilityScore > 0.3)
+          .sort((a, b) => b.compatibilityScore - a.compatibilityScore);
         
-        setPotentialMatches(potentialMatchesWithScores);
+        setDebugInfo(prev => [
+          ...prev, 
+          `Potential matches after filtering: ${filteredMatches.length}`,
+          ...filteredMatches.map(m => `Match: ${m.profile?.username}, Score: ${m.compatibilityScore}`)
+        ]);
+        
+        setPotentialMatches(filteredMatches);
       } catch (error: any) {
         console.error('Error fetching data:', error);
         toast({
@@ -318,6 +383,14 @@ const Matches = () => {
   return (
     <div className="container mx-auto py-8 px-4">
       <h1 className="text-3xl font-bold mb-6 text-purple-700">Find Your Gym Buddy</h1>
+      {debugInfo.length > 0 && (
+        <div className="bg-yellow-50 p-4 rounded-lg mb-4">
+          <h3 className="font-bold mb-2">Debug Information:</h3>
+          {debugInfo.map((info, index) => (
+            <p key={index} className="text-xs text-gray-600">{info}</p>
+          ))}
+        </div>
+      )}
       
       <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2 mb-8">
