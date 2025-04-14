@@ -269,7 +269,7 @@ const Workouts = () => {
         .insert({
           match_id: selectedMatch.id,
           scheduled_at: data.scheduled_at.toISOString(),
-          duration_minutes: parseInt(data.duration),
+          duration: parseInt(data.duration),
           location: data.location,
           notes: data.notes,
           status: 'scheduled' as 'scheduled' | 'completed' | 'cancelled'
@@ -311,7 +311,7 @@ const Workouts = () => {
     // Set default values for the edit form
     editForm.reset({
       scheduled_at: new Date(workout.scheduled_at),
-      duration_minutes: workout.duration_minutes,
+      duration: workout.duration,
       location: workout.location,
       notes: workout.notes || '',
     });
@@ -506,7 +506,7 @@ const Workouts = () => {
                 </div>
                 <div className="text-sm text-gray-500">
                   <Clock className="inline-block h-4 w-4 mr-1 align-middle" />
-                  {workout.duration_minutes} Minutes
+                  {workout.duration} Minutes
                 </div>
                 <div className="text-sm text-gray-500">
                   <MapPin className="inline-block h-4 w-4 mr-1 align-middle" />
@@ -582,7 +582,7 @@ const Workouts = () => {
                 </div>
                 <div className="text-sm text-gray-500">
                   <Clock className="inline-block h-4 w-4 mr-1 align-middle" />
-                  {workout.duration_minutes} Minutes
+                  {workout.duration} Minutes
                 </div>
                 <div className="text-sm text-gray-500">
                   <MapPin className="inline-block h-4 w-4 mr-1 align-middle" />

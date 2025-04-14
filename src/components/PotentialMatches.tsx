@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { MatchScore } from '@/types/supabase';
 import MatchCard from '@/components/MatchCard';
 import { getTopMatches } from '@/utils/matchingUtils';
+import MatchDetailsDialog from '@/components/MatchDetailsDialog';
 
 interface PotentialMatchesProps {
   potentialMatches: MatchScore[];
@@ -17,6 +18,7 @@ const PotentialMatches: React.FC<PotentialMatchesProps> = ({
   onReject 
 }) => {
   const [showAllMatches, setShowAllMatches] = useState(false);
+  const [selectedMatch, setSelectedMatch] = useState<MatchScore | null>(null);
   
   // Get top 3 matches unless showAllMatches is true
   const displayedMatches = showAllMatches 
@@ -44,6 +46,7 @@ const PotentialMatches: React.FC<PotentialMatchesProps> = ({
             match={match}
             onAccept={(userId) => onAccept(userId)}
             onReject={(userId) => onReject(userId)}
+            onViewDetails={() => setSelectedMatch(match)}
           />
         ))}
       </div>
@@ -58,6 +61,21 @@ const PotentialMatches: React.FC<PotentialMatchesProps> = ({
             {showAllMatches ? "Show Top 3 Matches" : `Show All Matches (${potentialMatches.length})`}
           </Button>
         </div>
+      )}
+
+      {selectedMatch && (
+        <MatchDetailsDialog
+          match={selectedMatch}
+          onClose={() => setSelectedMatch(null)}
+          onAccept={(userId) => {
+            onAccept(userId);
+            setSelectedMatch(null);
+          }}
+          onReject={(userId) => {
+            onReject(userId);
+            setSelectedMatch(null);
+          }}
+        />
       )}
     </>
   );

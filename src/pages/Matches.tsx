@@ -84,6 +84,10 @@ const Matches = () => {
     }
   };
 
+  const handleExistingMatchAction = (matchId: string, action: 'accept' | 'reject') => {
+    handleMatchResponse(matchId, action);
+  };
+
   const handleMatchResponse = async (matchId: string, action: 'accept' | 'reject') => {
     try {
       const { error } = await supabase
@@ -152,8 +156,8 @@ const Matches = () => {
           <ExistingMatches 
             matches={existingMatches}
             currentUserId={user?.id || ''}
-            onAccept={handleMatchResponse}
-            onReject={handleMatchResponse}
+            onAccept={handleExistingMatchAction}
+            onReject={handleExistingMatchAction}
           />
         </TabsContent>
       </Tabs>

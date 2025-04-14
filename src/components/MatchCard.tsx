@@ -4,7 +4,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Activity, User, MapPin, Calendar, Clock, X, Check } from "lucide-react";
+import { Activity, User, MapPin, Calendar, Clock, X, Check, Info } from "lucide-react";
 import { MatchScore } from '@/types/supabase';
 import { getFormattedDays, getFormattedTimeSlots } from '@/utils/matchingUtils';
 
@@ -12,9 +12,10 @@ interface MatchCardProps {
   match: MatchScore;
   onAccept: (userId: string) => void;
   onReject: (userId: string) => void;
+  onViewDetails: () => void;
 }
 
-const MatchCard: React.FC<MatchCardProps> = ({ match, onAccept, onReject }) => {
+const MatchCard: React.FC<MatchCardProps> = ({ match, onAccept, onReject, onViewDetails }) => {
   return (
     <Card className="overflow-hidden">
       <CardHeader className="bg-purple-50 pb-2">
@@ -51,6 +52,15 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, onAccept, onReject }) => {
               </li>
             ))}
           </ul>
+          <Button 
+            variant="link" 
+            size="sm" 
+            onClick={onViewDetails}
+            className="mt-2 text-purple-700 p-0 h-auto"
+          >
+            <Info className="h-4 w-4 mr-1" /> 
+            View detailed compatibility
+          </Button>
         </div>
         
         <div className="flex items-center text-sm text-gray-600">
