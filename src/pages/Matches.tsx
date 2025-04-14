@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,112 +9,21 @@ import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Profile, FitnessProfile, Match } from '@/types/supabase';
-
-type PotentialMatch = {
-  id: string;
-  profile: Profile;
-  fitnessProfile: FitnessProfile;
-  compatibilityScore: number;
-};
-
-const calculateCompatibilityScore = (
-  userFitnessProfile: FitnessProfile,
-  otherFitnessProfile: FitnessProfile
-): number => {
-  let score = 0;
-  let totalFactors = 0;
-  
-  // Fitness level matching
-  if (userFitnessProfile.fitness_level === otherFitnessProfile.fitness_level) {
-    score += 1;
-  }
-  totalFactors += 1;
-  
-  // Fitness style matching
-  const sharedStyles = userFitnessProfile.fitness_style.filter(style => 
-    otherFitnessProfile.fitness_style.includes(style)
-  );
-  score += (sharedStyles.length / Math.max(userFitnessProfile.fitness_style.length, otherFitnessProfile.fitness_style.length)) * 3;
-  totalFactors += 3;
-  
-  // Availability days matching
-  const sharedDays = userFitnessProfile.availability_days.filter(day => 
-    otherFitnessProfile.availability_days.includes(day)
-  );
-  score += (sharedDays.length / 7) * 2;
-  totalFactors += 2;
-  
-  // Time slots matching
-  const sharedTimeSlots = userFitnessProfile.preferred_time_slots.filter(slot => 
-    otherFitnessProfile.preferred_time_slots.includes(slot)
-  );
-  score += (sharedTimeSlots.length / Math.max(userFitnessProfile.preferred_time_slots.length, otherFitnessProfile.preferred_time_slots.length)) * 2;
-  totalFactors += 2;
-  
-  // Location and gym matching
-  if (
-    userFitnessProfile.gym_name && 
-    otherFitnessProfile.gym_name && 
-    userFitnessProfile.gym_name.toLowerCase() === otherFitnessProfile.gym_name.toLowerCase()
-  ) {
-    score += 2;
-  } else if (
-    userFitnessProfile.location.toLowerCase() === otherFitnessProfile.location.toLowerCase()
-  ) {
-    score += 1;
-  }
-  totalFactors += 2;
-  
-  // Fitness goal matching (added more weight)
-  if (userFitnessProfile.fitness_goal === otherFitnessProfile.fitness_goal) {
-    score += 3;
-    totalFactors += 3;
-  }
-  
-  return parseFloat((score / totalFactors).toFixed(2));
-};
-
-const getFormattedTimeSlots = (timeSlots: string[]): string[] => {
-  const formatMap: Record<string, string> = {
-    early_morning: "Early Morning (5am-8am)",
-    morning: "Morning (8am-11am)",
-    midday: "Midday (11am-2pm)",
-    afternoon: "Afternoon (2pm-5pm)",
-    evening: "Evening (5pm-8pm)",
-    late_evening: "Late Evening (8pm-11pm)",
-  };
-  
-  return timeSlots.map(slot => formatMap[slot] || slot);
-};
-
-const getFormattedDays = (days: string[]): string[] => {
-  const formatMap: Record<string, string> = {
-    mon: "Monday",
-    tue: "Tuesday",
-    wed: "Wednesday",
-    thu: "Thursday",
-    fri: "Friday",
-    sat: "Saturday",
-    sun: "Sunday",
-  };
-  
-  return days.map(day => formatMap[day] || day);
-};
-
-const capitalizeFirstLetter = (string: string): string => {
-  return string.charAt(0).toUpperCase() + string.slice(1);
-};
+import { Profile, FitnessProfile, Match, MatchScore } from '@/types/supabase';
+import MatchCard from '@/components/MatchCard';
+import { calculateMatchScore, getTopMatches, getFormattedTimeSlots, getFormattedDays } from '@/utils/matchingUtils';
 
 const Matches = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
-  const [potentialMatches, setPotentialMatches] = useState<PotentialMatch[]>([]);
+  const [potentialMatches, setPotentialMatches] = useState<MatchScore[]>([]);
   const [existingMatches, setExistingMatches] = useState<any[]>([]);
+  const [userProfile, setUserProfile] = useState<Profile | null>(null);
   const [userFitnessProfile, setUserFitnessProfile] = useState<FitnessProfile | null>(null);
   const [activeTab, setActiveTab] = useState('potential');
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
+  const [showAllMatches, setShowAllMatches] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -123,6 +33,20 @@ const Matches = () => {
       }
       
       try {
+        // Fetch user's profile
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        
+        if (profileError) {
+          setDebugInfo(prev => [...prev, `Error fetching profile: ${profileError.message}`]);
+          throw profileError;
+        }
+        
+        setUserProfile(profileData);
+        
         // Fetch user's fitness profile
         const { data: fitnessProfileData, error: fitnessProfileError } = await supabase
           .from('fitness_profiles')
@@ -153,7 +77,18 @@ const Matches = () => {
         
         setUserFitnessProfile(typedFitnessProfile);
         
-        // Fetch all fitness profiles except the current user's
+        // Fetch all profiles
+        const { data: allProfiles, error: allProfilesError } = await supabase
+          .from('profiles')
+          .select('*')
+          .neq('id', user.id);
+        
+        if (allProfilesError) {
+          setDebugInfo(prev => [...prev, `Error fetching profiles: ${allProfilesError.message}`]);
+          throw allProfilesError;
+        }
+        
+        // Fetch all fitness profiles
         const { data: allFitnessProfiles, error: allFitnessProfilesError } = await supabase
           .from('fitness_profiles')
           .select('*')
@@ -164,20 +99,10 @@ const Matches = () => {
           throw allFitnessProfilesError;
         }
         
-        // Fetch corresponding profiles
-        const { data: allProfiles, error: allProfilesError } = await supabase
-          .from('profiles')
-          .select('*');
-        
-        if (allProfilesError) {
-          setDebugInfo(prev => [...prev, `Error fetching profiles: ${allProfilesError.message}`]);
-          throw allProfilesError;
-        }
-        
         // Fetch existing matches to exclude from potential matches
         const { data: userMatches, error: userMatchesError } = await supabase
           .from('matches')
-          .select('*, profiles(*)')
+          .select('*')
           .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`);
         
         if (userMatchesError) {
@@ -191,11 +116,9 @@ const Matches = () => {
             
             const otherUserProfile = allProfiles.find(profile => profile.id === otherUserId);
             
-            const { data: otherUserFitnessProfile } = await supabase
-              .from('fitness_profiles')
-              .select('*')
-              .eq('id', otherUserId)
-              .single();
+            const otherUserFitnessProfile = allFitnessProfiles.find(
+              fitnessProfile => fitnessProfile.id === otherUserId
+            );
             
             return {
               ...match,
@@ -213,58 +136,60 @@ const Matches = () => {
         
         const existingMatchUserIds = userMatches.flatMap(match => [match.user1_id, match.user2_id]);
         
-        // Filter out users already in matches and with completed profiles
-        const availableProfiles = allFitnessProfiles.filter(
-          profile => 
-            !existingMatchUserIds.includes(profile.id) && 
-            profile.fitness_level && 
-            profile.fitness_goal && 
-            profile.fitness_style.length > 0
-        );
+        // Calculate compatibility scores for all potential matches
+        const potentialMatchScores: MatchScore[] = [];
         
-        setDebugInfo(prev => [
-          ...prev, 
-          `Total fitness profiles: ${allFitnessProfiles.length}`,
-          `Existing match user IDs: ${existingMatchUserIds.join(', ')}`,
-          `Available profiles: ${availableProfiles.length}`
-        ]);
-        
-        const potentialMatchesWithScores = availableProfiles.map(fitnessProfile => {
-          const profile = allProfiles.find(p => p.id === fitnessProfile.id);
+        for (const otherUserProfile of allProfiles) {
+          // Skip users already matched with
+          if (existingMatchUserIds.includes(otherUserProfile.id)) {
+            continue;
+          }
           
-          const typedFitnessProfile: FitnessProfile = {
-            ...fitnessProfile,
-            fitness_level: fitnessProfile.fitness_level as 'beginner' | 'intermediate' | 'advanced',
-            fitness_goal: fitnessProfile.fitness_goal as 'bulking' | 'cutting' | 'maintenance' | 'endurance' | 'flexibility' | 'general'
+          // Find the fitness profile for this user
+          const otherUserFitnessProfile = allFitnessProfiles.find(fp => fp.id === otherUserProfile.id);
+          
+          // Skip users without complete fitness profiles
+          if (!otherUserFitnessProfile || 
+              !otherUserFitnessProfile.fitness_level || 
+              !otherUserFitnessProfile.fitness_goal ||
+              otherUserFitnessProfile.fitness_style.length === 0) {
+            continue;
+          }
+          
+          const typedOtherFitnessProfile: FitnessProfile = {
+            ...otherUserFitnessProfile,
+            fitness_level: otherUserFitnessProfile.fitness_level as 'beginner' | 'intermediate' | 'advanced',
+            fitness_goal: otherUserFitnessProfile.fitness_goal as 'bulking' | 'cutting' | 'maintenance' | 'endurance' | 'flexibility' | 'general'
           };
           
-          const compatibilityScore = calculateCompatibilityScore(
-            userFitnessProfile, 
-            typedFitnessProfile
+          // Calculate match score
+          const matchScore = calculateMatchScore(
+            profileData,
+            typedFitnessProfile,
+            otherUserProfile,
+            typedOtherFitnessProfile
           );
           
-          return {
-            id: fitnessProfile.id,
-            profile,
-            fitnessProfile: typedFitnessProfile,
-            compatibilityScore,
-          };
-        });
+          potentialMatchScores.push(matchScore);
+        }
         
         // Filter out matches with very low compatibility
-        const filteredMatches = potentialMatchesWithScores
-          .filter(match => match.compatibilityScore > 0.3)
-          .sort((a, b) => b.compatibilityScore - a.compatibilityScore);
+        const filteredMatches = potentialMatchScores.filter(match => match.compatibilityScore > 0.3);
         
         setDebugInfo(prev => [
           ...prev, 
-          `Potential matches after filtering: ${filteredMatches.length}`,
-          ...filteredMatches.map(m => `Match: ${m.profile?.username}, Score: ${m.compatibilityScore}`)
+          `Total potential users: ${allProfiles.length}`,
+          `Users with fitness profiles: ${allFitnessProfiles.length}`,
+          `Existing matches: ${userMatches.length}`,
+          `Potential matches (before filtering): ${potentialMatchScores.length}`,
+          `Potential matches (after filtering): ${filteredMatches.length}`,
+          ...filteredMatches.map(m => `Match: ${m.profile?.username}, Score: ${m.compatibilityScore.toFixed(2)}, Reasons: ${m.matchReasons.length}`)
         ]);
         
-        setPotentialMatches(filteredMatches);
+        setPotentialMatches(filteredMatches.sort((a, b) => b.compatibilityScore - a.compatibilityScore));
       } catch (error: any) {
         console.error('Error fetching data:', error);
+        setDebugInfo(prev => [...prev, `Error: ${error.message}`]);
         toast({
           title: "Error",
           description: "Failed to load match data. Please try again.",
@@ -283,13 +208,21 @@ const Matches = () => {
     
     try {
       if (action === 'accept') {
+        // Find the match details
+        const matchDetails = potentialMatches.find(m => m.userId === matchUserId);
+        
+        if (!matchDetails) {
+          throw new Error("Match details not found");
+        }
+        
+        // Create the match in the database
         const { error } = await supabase
           .from('matches')
           .insert({
             user1_id: user.id,
             user2_id: matchUserId,
             status: 'pending',
-            compatibility_score: potentialMatches.find(m => m.id === matchUserId)?.compatibilityScore || 0,
+            compatibility_score: matchDetails.compatibilityScore,
           });
         
         if (error) throw error;
@@ -298,34 +231,27 @@ const Matches = () => {
           title: "Match Requested",
           description: "Match request has been sent!",
         });
-      }
-      
-      setPotentialMatches(prev => prev.filter(match => match.id !== matchUserId));
-      
-      if (action === 'accept') {
-        const { data: newMatch, error } = await supabase
+        
+        // Update the existing matches list
+        const { data: newMatch, error: matchError } = await supabase
           .from('matches')
-          .select('*, profiles(*)')
+          .select('*')
           .eq('user1_id', user.id)
           .eq('user2_id', matchUserId)
           .single();
         
-        if (error) throw error;
-        
-        const otherUserProfile = newMatch.profiles;
-        
-        const { data: otherUserFitnessProfile } = await supabase
-          .from('fitness_profiles')
-          .select('*')
-          .eq('id', matchUserId)
-          .single();
+        if (matchError) throw matchError;
         
         setExistingMatches(prev => [...prev, {
           ...newMatch,
-          otherUser: otherUserProfile,
-          otherUserFitnessProfile,
+          otherUser: matchDetails.profile,
+          otherUserFitnessProfile: matchDetails.fitnessProfile,
         }]);
       }
+      
+      // Remove the match from the potential matches list
+      setPotentialMatches(prev => prev.filter(match => match.userId !== matchUserId));
+      
     } catch (error: any) {
       console.error('Error processing match action:', error);
       toast({
@@ -380,11 +306,17 @@ const Matches = () => {
     );
   }
 
+  // Get top 3 matches unless showAllMatches is true
+  const displayedMatches = showAllMatches 
+    ? potentialMatches 
+    : getTopMatches(potentialMatches, 3);
+
   return (
     <div className="container mx-auto py-8 px-4">
       <h1 className="text-3xl font-bold mb-6 text-purple-700">Find Your Gym Buddy</h1>
+      
       {debugInfo.length > 0 && (
-        <div className="bg-yellow-50 p-4 rounded-lg mb-4">
+        <div className="bg-yellow-50 p-4 rounded-lg mb-4 overflow-auto max-h-60">
           <h3 className="font-bold mb-2">Debug Information:</h3>
           {debugInfo.map((info, index) => (
             <p key={index} className="text-xs text-gray-600">{info}</p>
@@ -399,109 +331,31 @@ const Matches = () => {
         </TabsList>
         
         <TabsContent value="potential">
-          {potentialMatches.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {potentialMatches.map(match => (
-                <Card key={match.id} className="overflow-hidden">
-                  <CardHeader className="bg-purple-50 pb-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-12 w-12 border-2 border-purple-200">
-                          <AvatarImage src={match.profile?.avatar_url || undefined} />
-                          <AvatarFallback className="bg-purple-700 text-white">
-                            {match.profile?.username?.charAt(0).toUpperCase() || 'U'}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <CardTitle className="text-lg">{match.profile?.full_name || match.profile?.username}</CardTitle>
-                          <p className="text-sm text-gray-500">@{match.profile?.username}</p>
-                        </div>
-                      </div>
-                      <Badge className="bg-purple-600">
-                        {Math.round(match.compatibilityScore * 100)}% Match
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="pt-4 space-y-3">
-                    {match.profile?.bio && (
-                      <p className="text-sm text-gray-700 mb-3">{match.profile.bio}</p>
-                    )}
-                    
-                    <div className="flex items-center text-sm text-gray-600">
-                      <Activity className="h-4 w-4 mr-2 text-purple-600" />
-                      <span className="capitalize">{match.fitnessProfile.fitness_level} level</span>
-                    </div>
-                    
-                    <div className="flex items-center text-sm text-gray-600">
-                      <User className="h-4 w-4 mr-2 text-purple-600" />
-                      <span className="capitalize">Goal: {match.fitnessProfile.fitness_goal.replace('_', ' ')}</span>
-                    </div>
-                    
-                    <div className="flex items-start text-sm text-gray-600">
-                      <MapPin className="h-4 w-4 mr-2 mt-0.5 text-purple-600 flex-shrink-0" />
-                      <div>
-                        <span>{match.fitnessProfile.location}</span>
-                        {match.fitnessProfile.gym_name && (
-                          <span className="block text-xs mt-0.5 text-gray-500">
-                            {match.fitnessProfile.gym_name}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-start text-sm text-gray-600">
-                      <Calendar className="h-4 w-4 mr-2 mt-0.5 text-purple-600 flex-shrink-0" />
-                      <div>
-                        <span className="font-medium">Available on:</span>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {getFormattedDays(match.fitnessProfile.availability_days).map((day, i) => (
-                            <Badge key={i} variant="outline" className="text-xs">{day}</Badge>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-start text-sm text-gray-600">
-                      <Clock className="h-4 w-4 mr-2 mt-0.5 text-purple-600 flex-shrink-0" />
-                      <div>
-                        <span className="font-medium">Preferred times:</span>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {getFormattedTimeSlots(match.fitnessProfile.preferred_time_slots).map((slot, i) => (
-                            <Badge key={i} variant="outline" className="text-xs">{slot}</Badge>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <span className="text-sm font-medium text-gray-700">Training styles:</span>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {match.fitnessProfile.fitness_style.map((style, i) => (
-                          <Badge key={i} className="bg-purple-100 text-purple-800 hover:bg-purple-200">
-                            {capitalizeFirstLetter(style)}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  </CardContent>
-                  <CardFooter className="flex justify-between pt-0">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => handleMatchAction(match.id, 'reject')}
-                      className="border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600"
-                    >
-                      <X className="h-5 w-5 mr-1" /> Skip
-                    </Button>
-                    <Button 
-                      onClick={() => handleMatchAction(match.id, 'accept')}
-                      className="bg-purple-600 hover:bg-purple-700"
-                    >
-                      <Check className="h-5 w-5 mr-1" /> Connect
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))}
-            </div>
+          {displayedMatches.length > 0 ? (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {displayedMatches.map(match => (
+                  <MatchCard 
+                    key={match.userId}
+                    match={match}
+                    onAccept={(userId) => handleMatchAction(userId, 'accept')}
+                    onReject={(userId) => handleMatchAction(userId, 'reject')}
+                  />
+                ))}
+              </div>
+              
+              {potentialMatches.length > 3 && (
+                <div className="text-center mt-8">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setShowAllMatches(!showAllMatches)}
+                    className="border-purple-200 text-purple-700"
+                  >
+                    {showAllMatches ? "Show Top 3 Matches" : `Show All Matches (${potentialMatches.length})`}
+                  </Button>
+                </div>
+              )}
+            </>
           ) : (
             <div className="text-center py-12">
               <h3 className="text-xl font-medium text-gray-700 mb-2">No potential matches found</h3>

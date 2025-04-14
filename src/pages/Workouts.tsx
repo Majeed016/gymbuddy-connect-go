@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -53,6 +52,8 @@ const Workouts = () => {
   const [selectedMatch, setSelectedMatch] = useState<MatchWithProfiles | null>(null);
   const [open, setOpen] = useState(false);
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
+  const [editingWorkout, setEditingWorkout] = useState<Workout | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
 
   const form = useForm<WorkoutFormValues>({
     resolver: zodResolver(workoutFormSchema),
@@ -62,7 +63,17 @@ const Workouts = () => {
       location: "",
       notes: "",
     },
-  })
+  });
+
+  const editForm = useForm<WorkoutFormValues>({
+    resolver: zodResolver(workoutFormSchema),
+    defaultValues: {
+      scheduled_at: new Date(),
+      duration: "60",
+      location: "",
+      notes: "",
+    },
+  });
 
   useEffect(() => {
     const fetchWorkouts = async () => {
@@ -291,6 +302,19 @@ const Workouts = () => {
         variant: "destructive",
       });
     }
+  };
+
+  const handleEditWorkout = async (workout: Workout) => {
+    setEditingWorkout(workout);
+    setIsEditing(true);
+
+    // Set default values for the edit form
+    editForm.reset({
+      scheduled_at: new Date(workout.scheduled_at),
+      duration_minutes: workout.duration_minutes,
+      location: workout.location,
+      notes: workout.notes || '',
+    });
   };
 
   if (isLoading) {

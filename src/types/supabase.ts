@@ -66,3 +66,11 @@ export type MatchWithOtherUser = Match & {
     avatar_url: string | null;
   };
 };
+
+export type MatchScore = {
+  userId: string;
+  profile: Profile;
+  fitnessProfile: FitnessProfile;
+  compatibilityScore: number;
+  matchReasons: string[];
+};
