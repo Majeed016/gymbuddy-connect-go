@@ -434,36 +434,27 @@ const Workouts = () => {
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="match_id"
-                render={() => (
-                  <FormItem>
-                    <FormLabel>Select a Match</FormLabel>
-                    <Select onValueChange={(value) => {
-                      const match = matches.find(match => match.id === value);
-                      setSelectedMatch(match || null);
-                    }}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a match" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {matches.map((match) => (
-                          <SelectItem key={match.id} value={match.id}>
-                            {match.otherUser?.full_name || match.otherUser?.username}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormDescription>
-                      Who are you planning to work out with?
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="space-y-2">
+                <Label>Select a Match</Label>
+                <Select onValueChange={(value) => {
+                  const match = matches.find(match => match.id === value);
+                  setSelectedMatch(match || null);
+                }}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select a match" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {matches.map((match) => (
+                      <SelectItem key={match.id} value={match.id}>
+                        {match.otherUser?.full_name || match.otherUser?.username}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground">
+                  Who are you planning to work out with?
+                </p>
+              </div>
 
               <Button type="submit" className="bg-purple-600 hover:bg-purple-700">
                 Schedule Workout
