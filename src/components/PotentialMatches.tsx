@@ -44,8 +44,8 @@ const PotentialMatches: React.FC<PotentialMatchesProps> = ({
           <MatchCard 
             key={match.userId}
             match={match}
-            onAccept={(userId) => onAccept(userId)}
-            onReject={(userId) => onReject(userId)}
+            onAccept={onAccept}
+            onReject={onReject}
             onViewDetails={() => setSelectedMatch(match)}
           />
         ))}
@@ -67,14 +67,8 @@ const PotentialMatches: React.FC<PotentialMatchesProps> = ({
         <MatchDetailsDialog
           match={selectedMatch}
           onClose={() => setSelectedMatch(null)}
-          onAccept={(userId) => {
-            onAccept(userId);
-            setSelectedMatch(null);
-          }}
-          onReject={(userId) => {
-            onReject(userId);
-            setSelectedMatch(null);
-          }}
+          onAccept={onAccept}
+          onReject={onReject}
         />
       )}
     </>

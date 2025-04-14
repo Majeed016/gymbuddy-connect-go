@@ -83,7 +83,6 @@ const Workouts = () => {
           return;
         }
 
-        // Step 1: Fetch accepted matches for the current user
         const { data: matchesData, error: matchesError } = await supabase
           .from('matches')
           .select('*')
@@ -101,7 +100,6 @@ const Workouts = () => {
           return;
         }
 
-        // Step 2: Fetch profiles for all users involved in matches
         const otherUserIds = matchesData.map(match => 
           match.user1_id === user.id ? match.user2_id : match.user1_id
         );
@@ -116,7 +114,6 @@ const Workouts = () => {
           throw profilesError;
         }
 
-        // Step 3: Fetch fitness profiles for the other users
         const { data: fitnessProfilesData, error: fitnessProfilesError } = await supabase
           .from('fitness_profiles')
           .select('*')
@@ -127,7 +124,6 @@ const Workouts = () => {
           throw fitnessProfilesError;
         }
 
-        // Step 4: Combine match data with profiles
         const enhancedMatches = matchesData.map(match => {
           const otherUserId = match.user1_id === user.id ? match.user2_id : match.user1_id;
           const otherUserProfile = profilesData.find(profile => profile.id === otherUserId);
@@ -142,7 +138,6 @@ const Workouts = () => {
 
         setMatches(enhancedMatches);
 
-        // Step 5: Fetch workouts for these matches
         const { data: workoutsData, error: workoutsError } = await supabase
           .from('workouts')
           .select('*')
@@ -153,7 +148,6 @@ const Workouts = () => {
           throw workoutsError;
         }
 
-        // Step 6: Combine workout data with match data
         const workoutsWithMatches = workoutsData.map(workout => {
           const matchData = enhancedMatches.find(match => match.id === workout.match_id);
           return {
@@ -162,7 +156,6 @@ const Workouts = () => {
           } as Workout & { match: MatchWithProfiles };
         });
 
-        // Step 7: Separate past and future workouts
         const now = new Date();
         const futureWorkouts = workoutsWithMatches.filter(
           workout => new Date(workout.scheduled_at) >= now
@@ -269,7 +262,7 @@ const Workouts = () => {
         .insert({
           match_id: selectedMatch.id,
           scheduled_at: data.scheduled_at.toISOString(),
-          duration: parseInt(data.duration),
+          duration_minutes: parseInt(data.duration),
           location: data.location,
           notes: data.notes,
           status: 'scheduled' as 'scheduled' | 'completed' | 'cancelled'
@@ -308,10 +301,9 @@ const Workouts = () => {
     setEditingWorkout(workout);
     setIsEditing(true);
 
-    // Set default values for the edit form
     editForm.reset({
       scheduled_at: new Date(workout.scheduled_at),
-      duration: workout.duration,
+      duration: workout.duration_minutes.toString(),
       location: workout.location,
       notes: workout.notes || '',
     });
@@ -506,7 +498,7 @@ const Workouts = () => {
                 </div>
                 <div className="text-sm text-gray-500">
                   <Clock className="inline-block h-4 w-4 mr-1 align-middle" />
-                  {workout.duration} Minutes
+                  {workout.duration_minutes} Minutes
                 </div>
                 <div className="text-sm text-gray-500">
                   <MapPin className="inline-block h-4 w-4 mr-1 align-middle" />
@@ -582,7 +574,7 @@ const Workouts = () => {
                 </div>
                 <div className="text-sm text-gray-500">
                   <Clock className="inline-block h-4 w-4 mr-1 align-middle" />
-                  {workout.duration} Minutes
+                  {workout.duration_minutes} Minutes
                 </div>
                 <div className="text-sm text-gray-500">
                   <MapPin className="inline-block h-4 w-4 mr-1 align-middle" />

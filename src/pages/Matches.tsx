@@ -156,8 +156,8 @@ const Matches = () => {
           <ExistingMatches 
             matches={existingMatches}
             currentUserId={user?.id || ''}
-            onAccept={handleExistingMatchAction}
-            onReject={handleExistingMatchAction}
+            onAccept={(matchId) => handleExistingMatchAction(matchId, 'accept')}
+            onReject={(matchId) => handleExistingMatchAction(matchId, 'reject')}
           />
         </TabsContent>
       </Tabs>
