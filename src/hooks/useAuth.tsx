@@ -2,7 +2,8 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useToast } from '@/hooks/use-toast';
 
 type AuthContextType = {
   user: User | null;
@@ -18,8 +19,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
+  const location = useLocation();
+  const { toast } = useToast();
 
   useEffect(() => {
+    // Check for email confirmation success
+    const handleEmailConfirmation = () => {
+      const hashParams = new URLSearchParams(location.hash.substring(1));
+      const type = hashParams.get('type');
+      
+      if (type === 'email_confirmation') {
+        toast({
+          title: "Email confirmed successfully!",
+          description: "Your email has been verified. Welcome to GymBuddy Connect!",
+        });
+        // This will be triggered after the auth state changes and session is set
+      }
+    };
+
+    handleEmailConfirmation();
+    
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
@@ -29,6 +48,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         
         if (event === 'SIGNED_OUT') {
           navigate('/auth');
+        } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          // Navigate to dashboard after sign in or email confirmation
+          navigate('/');
         }
       }
     );
@@ -43,7 +65,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       subscription.unsubscribe();
     };
-  }, [navigate]);
+  }, [navigate, location, toast]);
 
   const signOut = async () => {
     await supabase.auth.signOut();
